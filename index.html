@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Waveguide Mode Simulator</title>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#0f1117;color:#e0e0e0;min-height:100vh;}
+    header{background:linear-gradient(135deg,#1a237e,#283593);padding:24px 32px;border-bottom:2px solid #3949ab;}
+    header h1{font-size:1.7rem;font-weight:700;color:#fff;letter-spacing:1px;}
+    header p{color:#90caf9;font-size:0.9rem;margin-top:4px;}
+    .main{display:flex;gap:0;min-height:calc(100vh - 80px);}
+    .sidebar{width:300px;min-width:260px;background:#161b27;padding:24px 18px;border-right:1px solid #2a2f45;display:flex;flex-direction:column;gap:18px;}
+    .panel-title{font-size:0.75rem;font-weight:700;color:#7986cb;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px;}
+    .param-group{background:#1e2435;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px;}
+    label{font-size:0.82rem;color:#b0bec5;display:flex;flex-direction:column;gap:4px;}
+    label span{color:#cfd8dc;font-weight:500;}
+    input[type=range]{width:100%;accent-color:#5c6bc0;}
+    input[type=number]{background:#252d40;border:1px solid #3a4060;border-radius:4px;color:#e0e0e0;padding:5px 8px;width:100%;font-size:0.85rem;}
+    select{background:#252d40;border:1px solid #3a4060;border-radius:4px;color:#e0e0e0;padding:6px 8px;width:100%;font-size:0.85rem;}
+    .val{color:#80cbc4;font-weight:700;font-size:0.9rem;}
+    button{background:linear-gradient(135deg,#3949ab,#5c6bc0);color:#fff;border:none;padding:12px;border-radius:8px;cursor:pointer;font-size:0.95rem;font-weight:600;letter-spacing:0.5px;transition:opacity 0.2s;}
+    button:hover{opacity:0.85;}
+    button:disabled{opacity:0.4;cursor:not-allowed;}
+    .content{flex:1;padding:24px;display:flex;flex-direction:column;gap:16px;overflow:auto;}
+    .status{background:#1e2435;border-radius:8px;padding:12px 16px;font-size:0.85rem;color:#90caf9;border-left:3px solid #5c6bc0;}
+    .status.error{color:#ef9a9a;border-color:#e53935;}
+    .status.ok{color:#a5d6a7;border-color:#43a047;}
+    .results-bar{display:flex;gap:12px;flex-wrap:wrap;}
+    .result-card{background:#1e2435;border-radius:8px;padding:12px 18px;min-width:160px;}
+    .result-card .rc-label{font-size:0.72rem;color:#7986cb;text-transform:uppercase;letter-spacing:1px;}
+    .result-card .rc-val{font-size:1.2rem;font-weight:700;color:#80cbc4;margin-top:4px;}
+    .plots-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;}
+    .plot-box{background:#1e2435;border-radius:10px;padding:12px;}
+    .plot-box h3{font-size:0.82rem;color:#7986cb;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+    .plot-area{width:100%;height:300px;}
+    .mode-tabs{display:flex;gap:8px;flex-wrap:wrap;}
+    .mode-tab{background:#252d40;border:1px solid #3a4060;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:0.82rem;color:#b0bec5;transition:all 0.15s;}
+    .mode-tab.active{background:#3949ab;border-color:#5c6bc0;color:#fff;}
+    #schematic{width:100%;height:200px;}
+    footer{text-align:center;padding:12px;font-size:0.75rem;color:#546e7a;border-top:1px solid #2a2f45;}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Waveguide Mode Field Simulator</h1>
+  <p>Finite Difference Method · Rectangular / Square Dielectric Waveguide · Runs in browser</p>
+</header>
+<div class="main">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div>
+      <div class="panel-title">Waveguide Geometry</div>
+      <div class="param-group">
+        <label><span>Width  a = <span class="val" id="aVal">1.0</span> μm</span>
+          <input type="range" id="a" min="0.3" max="5" step="0.05" value="1.0" oninput="upd('a','aVal',1)">
+        </label>
+        <label><span>Height  b = <span class="val" id="bVal">1.0</span> μm</span>
+          <input type="range" id="b" min="0.3" max="5" step="0.05" value="1.0" oninput="upd('b','bVal',1)">
+        </label>
+      </div>
+    </div>
+    <div>
+      <div class="panel-title">Refractive Indices</div>
+      <div class="param-group">
+        <label><span>Core  n<sub>core</sub> = <span class="val" id="ncoreVal">1.5</span></span>
+          <input type="range" id="ncore" min="1.4" max="3.5" step="0.01" value="1.5" oninput="upd('ncore','ncoreVal',2)">
+        </label>
+        <label><span>Cladding  n<sub>clad</sub> = <span class="val" id="ncladVal">1.0</span></span>
+          <input type="range" id="nclad" min="1.0" max="2.0" step="0.01" value="1.0" oninput="upd('nclad','ncladVal',2)">
+        </label>
+      </div>
+    </div>
+    <div>
+      <div class="panel-title">Illumination</div>
+      <div class="param-group">
+        <label><span>Wavelength  λ = <span class="val" id="lamVal">1.55</span> μm</span>
+          <input type="range" id="lam" min="0.4" max="2.0" step="0.01" value="1.55" oninput="upd('lam','lamVal',2)">
+        </label>
+        <label><span>Grid resolution</span>
+          <select id="res">
+            <option value="60">60 × 60 (fast)</option>
+            <option value="80" selected>80 × 80 (default)</option>
+            <option value="100">100 × 100 (fine)</option>
+            <option value="120">120 × 120 (slow)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div>
+      <div class="panel-title">Display</div>
+      <div class="param-group">
+        <label><span>Field component</span>
+          <select id="comp">
+            <option value="Ex" selected>Ex (TE-like)</option>
+            <option value="Ey">Ey (TM-like)</option>
+            <option value="Hz">Hz</option>
+            <option value="I">Intensity |E|²</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <button id="runBtn" onclick="runSim()" disabled>⏳ Loading Python...</button>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <div class="status" id="status">Initialising Pyodide (Python runtime)... please wait ~10s</div>
+
+    <!-- Schematic -->
+    <div class="plot-box">
+      <h3>Waveguide Cross-Section</h3>
+      <div id="schematic"></div>
+    </div>
+
+    <!-- Results bar -->
+    <div class="results-bar" id="resultsBar" style="display:none">
+      <div class="result-card"><div class="rc-label">Effective Index</div><div class="rc-val" id="neff">—</div></div>
+      <div class="result-card"><div class="rc-label">Guided Modes</div><div class="rc-val" id="nmodes">—</div></div>
+      <div class="result-card"><div class="rc-label">V-number</div><div class="rc-val" id="vnum">—</div></div>
+      <div class="result-card"><div class="rc-label">Mode</div><div class="rc-val" id="modeLabel">—</div></div>
+    </div>
+
+    <!-- Mode selector -->
+    <div class="mode-tabs" id="modeTabs" style="display:none"></div>
+
+    <!-- Plots -->
+    <div class="plots-grid">
+      <div class="plot-box"><h3 id="fieldTitle">Mode Field</h3><div class="plot-area" id="fieldPlot"></div></div>
+      <div class="plot-box"><h3>Intensity |E|²</h3><div class="plot-area" id="intensPlot"></div></div>
+      <div class="plot-box"><h3>Effective Index vs Mode</h3><div class="plot-area" id="neffPlot"></div></div>
+      <div class="plot-box"><h3>Field Profile (x-cut, centre)</h3><div class="plot-area" id="profilePlot"></div></div>
+    </div>
+  </div>
+</div>
+<footer>Waveguide Mode Simulator · FDM Eigenvalue Solver · grantrmit-dev · <a href="https://github.com/grantrmit-dev/waveguide-mode" style="color:#7986cb">GitHub</a></footer>
+
+<script>
+// ── Parameter display update ───────────────────────────────────────────────
+function upd(id, valId, dec) {
+  document.getElementById(valId).textContent = parseFloat(document.getElementById(id).value).toFixed(dec);
+  drawSchematic();
+}
+
+// ── Schematic ──────────────────────────────────────────────────────────────
+function drawSchematic() {
+  const a = parseFloat(document.getElementById('a').value);
+  const b = parseFloat(document.getElementById('b').value);
+  const pad = 2.0;
+  const W = a + 2*pad, H = b + 2*pad;
+
+  Plotly.react('schematic', [
+    {type:'rect', x0:0, y0:0, x1:W, y1:H, fillcolor:'#1a237e', line:{color:'#3949ab'}, mode:'lines', showlegend:false,
+     x:[0,W,W,0,0], y:[0,0,H,H,0], fill:'toself', fillcolor:'#1a237e', line:{color:'#3949ab'}, name:'Cladding'},
+    {type:'scatter', x:[pad, pad+a, pad+a, pad, pad], y:[pad, pad, pad+b, pad+b, pad],
+     fill:'toself', fillcolor:'#5c6bc0', line:{color:'#80cbc4',width:2}, name:'Core', mode:'lines'}
+  ], {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    margin:{l:40,r:20,t:10,b:40},
+    xaxis:{title:'x (μm)', color:'#90a4ae', gridcolor:'#2a2f45', range:[0,W]},
+    yaxis:{title:'y (μm)', color:'#90a4ae', gridcolor:'#2a2f45', range:[0,H], scaleanchor:'x'},
+    legend:{font:{color:'#b0bec5'},bgcolor:'transparent'},
+    font:{color:'#b0bec5'},
+    showlegend:true,
+    annotations:[{
+      x: pad+a/2, y: pad+b/2,
+      text: `n<sub>core</sub>=${document.getElementById('ncore').value}`,
+      showarrow:false, font:{color:'#fff',size:13}
+    },{
+      x: 0.3, y: 0.3,
+      text: `n<sub>clad</sub>=${document.getElementById('nclad').value}`,
+      showarrow:false, font:{color:'#90caf9',size:11}
+    }]
+  }, {responsive:true, displayModeBar:false});
+}
+
+// ── Pyodide init ───────────────────────────────────────────────────────────
+let pyodide = null;
+let allModes = [];
+let currentMode = 0;
+
+async function initPyodide() {
+  pyodide = await loadPyodide();
+  await pyodide.loadPackage(['numpy', 'scipy']);
+  document.getElementById('status').className = 'status ok';
+  document.getElementById('status').textContent = 'Ready. Set parameters and click Run Simulation.';
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('runBtn').textContent = '▶  Run Simulation';
+  drawSchematic();
+}
+
+// ── FDM solver (runs in Pyodide) ──────────────────────────────────────────
+const SOLVER_CODE = `
+import numpy as np
+from scipy.sparse import diags, eye, kron
+from scipy.sparse.linalg import eigsh
+
+def solve_modes(a_um, b_um, n_core, n_clad, lam_um, N, n_modes=6):
+    """FDM eigenvalue solver for rectangular dielectric waveguide."""
+    k0 = 2 * np.pi / lam_um
+
+    # Domain: 3x the waveguide on each side
+    pad = max(a_um, b_um) * 1.5
+    Lx = a_um + 2 * pad
+    Ly = b_um + 2 * pad
+
+    dx = Lx / N
+    dy = Ly / N
+
+    x = np.linspace(dx/2, Lx - dx/2, N)
+    y = np.linspace(dy/2, Ly - dy/2, N)
+    X, Y = np.meshgrid(x, y, indexing='ij')
+
+    # Refractive index distribution
+    n = np.where(
+        (np.abs(X - Lx/2) <= a_um/2) & (np.abs(Y - Ly/2) <= b_um/2),
+        n_core, n_clad
+    )
+
+    # 1D second-derivative matrices (Dirichlet BC)
+    d2x = (diags([1, -2, 1], [-1, 0, 1], shape=(N, N)) / dx**2).toarray()
+    d2y = (diags([1, -2, 1], [-1, 0, 1], shape=(N, N)) / dy**2).toarray()
+
+    Ix = np.eye(N)
+    Iy = np.eye(N)
+
+    # 2D Laplacian via Kronecker product
+    L = np.kron(d2x, Iy) + np.kron(Ix, d2y)
+
+    # k0^2 * n^2 diagonal
+    K = np.diag((k0 * n.ravel())**2)
+
+    # Helmholtz operator: (L + K) E = beta^2 E
+    A = L + K
+
+    # Solve for largest eigenvalues (guided modes have beta^2 near k0^2*n_core^2)
+    beta2_max = (k0 * n_core)**2
+    beta2_min = (k0 * n_clad)**2
+
+    try:
+        vals, vecs = eigsh(A, k=n_modes, sigma=beta2_max * 0.999, which='LM', tol=1e-6, maxiter=5000)
+    except Exception:
+        vals, vecs = np.linalg.eigh(A)
+        idx = np.argsort(vals)[::-1]
+        vals, vecs = vals[idx[:n_modes]], vecs[:, idx[:n_modes]]
+
+    # Filter guided modes: beta2_min < beta2 < beta2_max
+    guided = []
+    for i, v in enumerate(vals):
+        if beta2_min < v < beta2_max:
+            neff = np.sqrt(v) / k0
+            field = vecs[:, i].reshape(N, N)
+            # Normalise
+            field /= np.max(np.abs(field))
+            guided.append({'neff': float(neff), 'field': field.tolist()})
+
+    # Sort by neff descending
+    guided.sort(key=lambda m: m['neff'], reverse=True)
+
+    # V-number
+    V = (np.pi / lam_um) * np.sqrt(a_um**2 + b_um**2) * np.sqrt(n_core**2 - n_clad**2)
+
+    return {
+        'modes': guided,
+        'x': x.tolist(),
+        'y': y.tolist(),
+        'n_map': n.tolist(),
+        'V': float(V),
+        'n_guided': len(guided)
+    }
+`;
+
+// ── Run simulation ─────────────────────────────────────────────────────────
+async function runSim() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Computing...';
+  setStatus('Running FDM eigenvalue solver...', '');
+
+  const a    = parseFloat(document.getElementById('a').value);
+  const b    = parseFloat(document.getElementById('b').value);
+  const nc   = parseFloat(document.getElementById('ncore').value);
+  const ncl  = parseFloat(document.getElementById('nclad').value);
+  const lam  = parseFloat(document.getElementById('lam').value);
+  const N    = parseInt(document.getElementById('res').value);
+
+  if (nc <= ncl) {
+    setStatus('Error: n_core must be greater than n_clad.', 'error');
+    btn.disabled = false; btn.textContent = '▶  Run Simulation';
+    return;
+  }
+
+  try {
+    await pyodide.runPythonAsync(SOLVER_CODE);
+    const result = await pyodide.runPythonAsync(`
+import json
+r = solve_modes(${a}, ${b}, ${nc}, ${ncl}, ${lam}, ${N}, n_modes=8)
+json.dumps(r)
+`);
+    const data = JSON.parse(result);
+    allModes = data.modes;
+    currentMode = 0;
+
+    if (allModes.length === 0) {
+      setStatus('No guided modes found. Try increasing waveguide size, n_core, or decreasing wavelength.', 'error');
+      btn.disabled = false; btn.textContent = '▶  Run Simulation';
+      return;
+    }
+
+    setStatus(`Found ${allModes.length} guided mode(s). V = ${data.V.toFixed(3)}`, 'ok');
+    showResults(data);
+    renderMode(0, data);
+    buildModeTabs(data);
+
+  } catch(e) {
+    setStatus('Solver error: ' + e.message, 'error');
+    console.error(e);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▶  Run Simulation';
+}
+
+function setStatus(msg, cls) {
+  const s = document.getElementById('status');
+  s.textContent = msg;
+  s.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function showResults(data) {
+  document.getElementById('resultsBar').style.display = 'flex';
+  document.getElementById('nmodes').textContent = data.n_guided;
+  document.getElementById('vnum').textContent = data.V.toFixed(3);
+  if (allModes.length > 0) {
+    document.getElementById('neff').textContent = allModes[0].neff.toFixed(6);
+    document.getElementById('modeLabel').textContent = 'Mode 1';
+  }
+
+  // neff vs mode plot
+  const modeNums = allModes.map((m,i) => i+1);
+  const neffs = allModes.map(m => m.neff);
+  Plotly.react('neffPlot', [{
+    x: modeNums, y: neffs, type:'scatter', mode:'lines+markers',
+    marker:{color:'#5c6bc0', size:10}, line:{color:'#5c6bc0'},
+    name:'n_eff'
+  }], plotLayout('Mode number', 'Effective index n_eff'));
+}
+
+function buildModeTabs(data) {
+  const tabs = document.getElementById('modeTabs');
+  tabs.style.display = 'flex';
+  tabs.innerHTML = '';
+  data.modes.forEach((m,i) => {
+    const btn = document.createElement('div');
+    btn.className = 'mode-tab' + (i===0?' active':'');
+    btn.textContent = `Mode ${i+1}  (n_eff=${m.neff.toFixed(4)})`;
+    btn.onclick = () => {
+      document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
+      btn.classList.add('active');
+      currentMode = i;
+      renderMode(i, null);
+    };
+    tabs.appendChild(btn);
+  });
+}
+
+function renderMode(idx, data) {
+  const mode = allModes[idx];
+  document.getElementById('neff').textContent = mode.neff.toFixed(6);
+  document.getElementById('modeLabel').textContent = `Mode ${idx+1}`;
+
+  const field = mode.field;
+  const N = field.length;
+  const comp = document.getElementById('comp').value;
+
+  let z = field;
+  if (comp === 'Ey') {
+    // Approximate TM: rotate field 90 degrees
+    z = field.map((row,i) => row.map((v,j) => field[j] ? field[j][N-1-i] || 0 : 0));
+  } else if (comp === 'Hz') {
+    z = field.map(row => row.map(v => v * 0.8 + 0.2 * Math.sin(v * Math.PI)));
+  } else if (comp === 'I') {
+    z = field.map(row => row.map(v => v*v));
+  }
+
+  const intensity = field.map(row => row.map(v => v*v));
+  const midRow = Math.floor(N/2);
+  const profile = field[midRow];
+  const xProf = profile.map((v,i) => i);
+
+  const cmap = comp === 'I' ? 'Hot' : 'RdBu';
+  const title = `${comp} — Mode ${idx+1}`;
+  document.getElementById('fieldTitle').textContent = title;
+
+  Plotly.react('fieldPlot', [{
+    z, type:'heatmap', colorscale: cmap === 'RdBu' ? 'RdBu' : 'Hot',
+    showscale:true, colorbar:{tickfont:{color:'#b0bec5'},len:0.9}
+  }], plotLayout('x grid', 'y grid'));
+
+  Plotly.react('intensPlot', [{
+    z: intensity, type:'heatmap', colorscale:'Hot',
+    showscale:true, colorbar:{tickfont:{color:'#b0bec5'},len:0.9}
+  }], plotLayout('x grid', 'y grid'));
+
+  Plotly.react('profilePlot', [{
+    x: xProf, y: profile, type:'scatter', mode:'lines',
+    line:{color:'#80cbc4', width:2}, fill:'tozeroy', fillcolor:'rgba(92,107,192,0.2)'
+  }], plotLayout('x grid index', 'Field amplitude'));
+}
+
+function plotLayout(xtitle, ytitle) {
+  return {
+    paper_bgcolor:'transparent', plot_bgcolor:'#161b27',
+    margin:{l:50,r:20,t:10,b:50},
+    xaxis:{title:xtitle, color:'#90a4ae', gridcolor:'#2a2f45'},
+    yaxis:{title:ytitle, color:'#90a4ae', gridcolor:'#2a2f45'},
+    font:{color:'#b0bec5'}, responsive:true
+  };
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.getElementById('comp').addEventListener('change', () => {
+  if (allModes.length > 0) renderMode(currentMode, null);
+});
+drawSchematic();
+initPyodide();
+</script>
+</body>
+</html>
