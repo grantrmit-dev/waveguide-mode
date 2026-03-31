@@ -75,13 +75,13 @@
         <label><span>Core  n<sub>core</sub></span>
           <div style="display:flex;gap:8px;align-items:center;">
             <input type="range" id="ncore" min="1.4" max="3.5" step="0.001" value="1.500" style="flex:1" oninput="syncFromSlider('ncore','ncoreNum','ncoreVal',3)">
-            <input type="number" id="ncoreNum" min="1.4" max="3.5" step="0.001" value="1.500" style="width:72px" onchange="syncFromNumber('ncore','ncoreNum','ncoreVal',3,1.4,3.5)">
+            <input type="number" id="ncoreNum" min="1.4" max="3.5" step="0.001" value="1.500" style="width:72px" onchange="syncFromNumber('ncore','ncoreNum','ncoreVal',3,1.4,3.5)" onblur="fmtDec(this,3)">
           </div>
         </label>
         <label><span>Cladding  n<sub>clad</sub></span>
           <div style="display:flex;gap:8px;align-items:center;">
             <input type="range" id="nclad" min="1.0" max="3.5" step="0.001" value="1.000" style="flex:1" oninput="syncFromSlider('nclad','ncladNum','ncladVal',3)">
-            <input type="number" id="ncladNum" min="1.0" max="3.5" step="0.001" value="1.000" style="width:72px" onchange="syncFromNumber('nclad','ncladNum','ncladVal',3,1.0,3.5)">
+            <input type="number" id="ncladNum" min="1.0" max="3.5" step="0.001" value="1.000" style="width:72px" onchange="syncFromNumber('nclad','ncladNum','ncladVal',3,1.0,3.5)" onblur="fmtDec(this,3)">
           </div>
         </label>
       </div>
@@ -160,10 +160,18 @@ function upd(id, valId, dec) {
   drawSchematic();
 }
 
+// Format a number input to fixed decimal places on blur
+function fmtDec(el, dec) {
+  const v = parseFloat(el.value);
+  if (!isNaN(v)) el.value = v.toFixed(dec);
+}
+
 // Slider → number input + display label
 function syncFromSlider(sliderId, numId, valId, dec) {
   const v = parseFloat(document.getElementById(sliderId).value);
-  document.getElementById(numId).value = v.toFixed(dec);
+  const numEl = document.getElementById(numId);
+  // Only reformat while not focused (avoid disrupting typing)
+  if (document.activeElement !== numEl) numEl.value = v.toFixed(dec);
   const lbl = valId && document.getElementById(valId);
   if (lbl) lbl.textContent = v.toFixed(dec);
   drawSchematic();
@@ -467,6 +475,13 @@ function plotLayout(xtitle, ytitle) {
 document.getElementById('comp').addEventListener('change', () => {
   if (allModes.length > 0) renderMode(currentMode, null);
 });
+
+// Format all number inputs to their correct decimal precision on load
+[['ncoreNum',3],['ncladNum',3]].forEach(([id,dec]) => {
+  const el = document.getElementById(id);
+  if (el) el.value = parseFloat(el.value).toFixed(dec);
+});
+
 drawSchematic();
 initPyodide();
 </script>
