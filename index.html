@@ -55,30 +55,45 @@
     <div>
       <div class="panel-title">Waveguide Geometry</div>
       <div class="param-group">
-        <label><span>Width  a = <span class="val" id="aVal">1.0</span> μm</span>
-          <input type="range" id="a" min="0" max="50" step="0.5" value="1.0" oninput="upd('a','aVal',1)">
+        <label><span>Width  a (μm)</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="range" id="a" min="0" max="50" step="0.5" value="1.0" style="flex:1" oninput="syncFromSlider('a','aNum','aVal',1)">
+            <input type="number" id="aNum" min="0" max="50" step="0.5" value="1.0" style="width:64px" onchange="syncFromNumber('a','aNum','aVal',1,0,50)">
+          </div>
         </label>
-        <label><span>Height  b = <span class="val" id="bVal">1.0</span> μm</span>
-          <input type="range" id="b" min="0" max="50" step="0.5" value="1.0" oninput="upd('b','bVal',1)">
+        <label><span>Height  b (μm)</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="range" id="b" min="0" max="50" step="0.5" value="1.0" style="flex:1" oninput="syncFromSlider('b','bNum','bVal',1)">
+            <input type="number" id="bNum" min="0" max="50" step="0.5" value="1.0" style="width:64px" onchange="syncFromNumber('b','bNum','bVal',1,0,50)">
+          </div>
         </label>
       </div>
     </div>
     <div>
       <div class="panel-title">Refractive Indices</div>
       <div class="param-group">
-        <label><span>Core  n<sub>core</sub> = <span class="val" id="ncoreVal">1.5</span></span>
-          <input type="range" id="ncore" min="1.4" max="3.5" step="0.01" value="1.5" oninput="upd('ncore','ncoreVal',2)">
+        <label><span>Core  n<sub>core</sub></span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="range" id="ncore" min="1.4" max="3.5" step="0.01" value="1.5" style="flex:1" oninput="syncFromSlider('ncore','ncoreNum','ncoreVal',2)">
+            <input type="number" id="ncoreNum" min="1.4" max="3.5" step="0.01" value="1.5" style="width:64px" onchange="syncFromNumber('ncore','ncoreNum','ncoreVal',2,1.4,3.5)">
+          </div>
         </label>
-        <label><span>Cladding  n<sub>clad</sub> = <span class="val" id="ncladVal">1.0</span></span>
-          <input type="range" id="nclad" min="1.0" max="2.0" step="0.01" value="1.0" oninput="upd('nclad','ncladVal',2)">
+        <label><span>Cladding  n<sub>clad</sub></span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="range" id="nclad" min="1.0" max="2.0" step="0.01" value="1.0" style="flex:1" oninput="syncFromSlider('nclad','ncladNum','ncladVal',2)">
+            <input type="number" id="ncladNum" min="1.0" max="2.0" step="0.01" value="1.0" style="width:64px" onchange="syncFromNumber('nclad','ncladNum','ncladVal',2,1.0,2.0)">
+          </div>
         </label>
       </div>
     </div>
     <div>
       <div class="panel-title">Illumination</div>
       <div class="param-group">
-        <label><span>Wavelength  λ = <span class="val" id="lamVal">1.55</span> μm</span>
-          <input type="range" id="lam" min="0.4" max="2.0" step="0.01" value="1.55" oninput="upd('lam','lamVal',2)">
+        <label><span>Wavelength  λ (μm)</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="range" id="lam" min="0.4" max="2.0" step="0.01" value="1.55" style="flex:1" oninput="syncFromSlider('lam','lamNum','lamVal',2)">
+            <input type="number" id="lamNum" min="0.4" max="2.0" step="0.01" value="1.55" style="width:64px" onchange="syncFromNumber('lam','lamNum','lamVal',2,0.4,2.0)">
+          </div>
         </label>
         <label><span>Grid resolution</span>
           <select id="res">
@@ -142,6 +157,27 @@
 // ── Parameter display update ───────────────────────────────────────────────
 function upd(id, valId, dec) {
   document.getElementById(valId).textContent = parseFloat(document.getElementById(id).value).toFixed(dec);
+  drawSchematic();
+}
+
+// Slider → number input + display label
+function syncFromSlider(sliderId, numId, valId, dec) {
+  const v = parseFloat(document.getElementById(sliderId).value);
+  document.getElementById(numId).value = v.toFixed(dec);
+  const lbl = valId && document.getElementById(valId);
+  if (lbl) lbl.textContent = v.toFixed(dec);
+  drawSchematic();
+}
+
+// Number input → slider + display label (with clamping)
+function syncFromNumber(sliderId, numId, valId, dec, minVal, maxVal) {
+  let v = parseFloat(document.getElementById(numId).value);
+  if (isNaN(v)) return;
+  v = Math.min(maxVal, Math.max(minVal, v));
+  document.getElementById(numId).value = v.toFixed(dec);
+  document.getElementById(sliderId).value = v;
+  const lbl = valId && document.getElementById(valId);
+  if (lbl) lbl.textContent = v.toFixed(dec);
   drawSchematic();
 }
 
