@@ -74,14 +74,14 @@
       <div class="param-group">
         <label><span>Core  n<sub>core</sub></span>
           <div style="display:flex;gap:8px;align-items:center;">
-            <input type="range" id="ncore" min="1.4" max="3.5" step="0.01" value="1.5" style="flex:1" oninput="syncFromSlider('ncore','ncoreNum','ncoreVal',2)">
-            <input type="number" id="ncoreNum" min="1.4" max="3.5" step="0.01" value="1.5" style="width:64px" onchange="syncFromNumber('ncore','ncoreNum','ncoreVal',2,1.4,3.5)">
+            <input type="range" id="ncore" min="1.4" max="3.5" step="0.001" value="1.500" style="flex:1" oninput="syncFromSlider('ncore','ncoreNum','ncoreVal',3)">
+            <input type="number" id="ncoreNum" min="1.4" max="3.5" step="0.001" value="1.500" style="width:72px" onchange="syncFromNumber('ncore','ncoreNum','ncoreVal',3,1.4,3.5)">
           </div>
         </label>
         <label><span>Cladding  n<sub>clad</sub></span>
           <div style="display:flex;gap:8px;align-items:center;">
-            <input type="range" id="nclad" min="1.0" max="2.0" step="0.01" value="1.0" style="flex:1" oninput="syncFromSlider('nclad','ncladNum','ncladVal',2)">
-            <input type="number" id="ncladNum" min="1.0" max="2.0" step="0.01" value="1.0" style="width:64px" onchange="syncFromNumber('nclad','ncladNum','ncladVal',2,1.0,2.0)">
+            <input type="range" id="nclad" min="1.0" max="3.5" step="0.001" value="1.000" style="flex:1" oninput="syncFromSlider('nclad','ncladNum','ncladVal',3)">
+            <input type="number" id="ncladNum" min="1.0" max="3.5" step="0.001" value="1.000" style="width:72px" onchange="syncFromNumber('nclad','ncladNum','ncladVal',3,1.0,3.5)">
           </div>
         </label>
       </div>
@@ -238,10 +238,14 @@ def solve_modes(a_um, b_um, n_core, n_clad, lam_um, N, n_modes=6):
     """FDM eigenvalue solver for rectangular dielectric waveguide."""
     k0 = 2 * np.pi / lam_um
 
-    # Domain: 3x the waveguide on each side (guard against zero dimensions)
+    # Guard against zero dimensions
     a_um = max(a_um, 0.05)
     b_um = max(b_um, 0.05)
-    pad = max(a_um, b_um) * 1.5
+
+    # Use large padding (5× waveguide dimension) to approximate infinite cladding.
+    # Guided modes decay evanescently into the cladding; 5× ensures the field
+    # is negligible at the Dirichlet boundary, so it behaves as infinite cladding.
+    pad = max(a_um, b_um) * 5.0
     Lx = a_um + 2 * pad
     Ly = b_um + 2 * pad
 
