@@ -352,6 +352,8 @@ json.dumps(r)
 `);
     const data = JSON.parse(result);
     allModes = data.modes;
+    // Attach physical coordinate arrays to each mode for use in renderMode
+    allModes.forEach(m => { m._x = data.x; m._y = data.y; });
     currentMode = 0;
 
     if (allModes.length === 0) {
@@ -438,27 +440,135 @@ function renderMode(idx, data) {
 
   const intensity = field.map(row => row.map(v => v*v));
   const midRow = Math.floor(N/2);
-  const profile = field[midRow];
-  const xProf = profile.map((v,i) => i);
+  const midCol = Math.floor(N/2);
+  const profile = field[midRow];           // horizontal cross-section (x-axis)
+  const profileY = field.map(r => r[midCol]); // vertical cross-section (y-axis)
+
+  // ── Retrieve real-space x/y axes from last simulation result ──
+  // x/y arrays are stored on allModes[idx] after being set in showResults
+  const xs = allModes[idx]._x || Array.from({length:N}, (_,i) => i);
+  const ys = allModes[idx]._y || Array.from({length:N}, (_,i) => i);
+  const hasPhysical = allModes[idx]._x !== undefined;
+  const xUnit = hasPhysical ? 'x (μm)' : 'x grid index';
+  const yUnit = hasPhysical ? 'y (μm)' : 'y grid index';
+
+  // ── FWHM calculation (on intensity = field²) ──
+  function calcFWHM(arr, coords) {
+    const intArr = arr.map(v => v*v);
+    const peak = Math.max(...intArr);
+    const half = peak / 2;
+    // Find left crossing
+    let left = null, right = null;
+    for (let i = 0; i < intArr.length-1; i++) {
+      if (intArr[i] <= half && intArr[i+1] > half && left === null) {
+        const t = (half - intArr[i]) / (intArr[i+1] - intArr[i]);
+        left = coords[i] + t*(coords[i+1]-coords[i]);
+      }
+    }
+    for (let i = intArr.length-1; i > 0; i--) {
+      if (intArr[i] <= half && intArr[i-1] > half && right === null) {
+        const t = (half - intArr[i]) / (intArr[i-1] - intArr[i]);
+        right = coords[i] + t*(coords[i-1]-coords[i]);
+      }
+    }
+    return (left !== null && right !== null) ? Math.abs(right - left) : null;
+  }
+
+  const fwhmX = calcFWHM(profile, xs);
+  const fwhmY = calcFWHM(profileY, ys);
+  const fwhmXStr = fwhmX !== null ? fwhmX.toFixed(3) + ' μm' : 'N/A';
+  const fwhmYStr = fwhmY !== null ? fwhmY.toFixed(3) + ' μm' : 'N/A';
+
+  // Show FWHM in results bar
+  let fwhmEl = document.getElementById('fwhmDisplay');
+  if (!fwhmEl) {
+    fwhmEl = document.createElement('div');
+    fwhmEl.id = 'fwhmDisplay';
+    fwhmEl.className = 'result-card';
+    document.getElementById('resultsBar').appendChild(fwhmEl);
+  }
+  fwhmEl.innerHTML = `<div class="result-label">FWHM</div>
+    <div class="result-value" style="font-size:0.9rem">x: ${fwhmXStr}<br>y: ${fwhmYStr}</div>`;
 
   const cmap = comp === 'I' ? 'Hot' : 'RdBu';
   const title = `${comp} — Mode ${idx+1}`;
   document.getElementById('fieldTitle').textContent = title;
 
+  // ── 2D field heatmap with FWHM cross-hair lines ──
+  const fwhmShapes = [];
+  const fwhmAnnotations = [];
+  if (fwhmX !== null) {
+    const cx = xs[midRow]; // x centre
+    const halfX = fwhmX / 2;
+    fwhmShapes.push(
+      {type:'line', x0:cx-halfX, x1:cx-halfX, y0:ys[0], y1:ys[ys.length-1],
+       line:{color:'#ffeb3b', width:1.5, dash:'dot'}},
+      {type:'line', x0:cx+halfX, x1:cx+halfX, y0:ys[0], y1:ys[ys.length-1],
+       line:{color:'#ffeb3b', width:1.5, dash:'dot'}}
+    );
+    fwhmAnnotations.push({
+      x: cx, y: ys[ys.length-1],
+      text: `FWHMx=${fwhmXStr}`, showarrow:false,
+      font:{color:'#ffeb3b', size:10}, xanchor:'center', yanchor:'bottom'
+    });
+  }
+  if (fwhmY !== null) {
+    const cy = ys[midCol];
+    const halfY = fwhmY / 2;
+    fwhmShapes.push(
+      {type:'line', y0:cy-halfY, y1:cy-halfY, x0:xs[0], x1:xs[xs.length-1],
+       line:{color:'#ff7043', width:1.5, dash:'dot'}},
+      {type:'line', y0:cy+halfY, y1:cy+halfY, x0:xs[0], x1:xs[xs.length-1],
+       line:{color:'#ff7043', width:1.5, dash:'dot'}}
+    );
+    fwhmAnnotations.push({
+      x: xs[0], y: cy,
+      text: `FWHMy=${fwhmYStr}`, showarrow:false,
+      font:{color:'#ff7043', size:10}, xanchor:'left', yanchor:'middle'
+    });
+  }
+
+  const baseLayout = plotLayout(xUnit, yUnit);
+  const heatLayout = {...baseLayout, shapes: fwhmShapes, annotations: fwhmAnnotations};
+
   Plotly.react('fieldPlot', [{
-    z, type:'heatmap', colorscale: cmap === 'RdBu' ? 'RdBu' : 'Hot',
+    x: xs, y: ys, z, type:'heatmap', colorscale: cmap === 'RdBu' ? 'RdBu' : 'Hot',
     showscale:true, colorbar:{tickfont:{color:'#b0bec5'},len:0.9}
-  }], plotLayout('x grid', 'y grid'));
+  }], heatLayout);
 
   Plotly.react('intensPlot', [{
-    z: intensity, type:'heatmap', colorscale:'Hot',
+    x: xs, y: ys, z: intensity, type:'heatmap', colorscale:'Hot',
     showscale:true, colorbar:{tickfont:{color:'#b0bec5'},len:0.9}
-  }], plotLayout('x grid', 'y grid'));
+  }], {...baseLayout, shapes: fwhmShapes, annotations: fwhmAnnotations});
 
-  Plotly.react('profilePlot', [{
-    x: xProf, y: profile, type:'scatter', mode:'lines',
-    line:{color:'#80cbc4', width:2}, fill:'tozeroy', fillcolor:'rgba(92,107,192,0.2)'
-  }], plotLayout('x grid index', 'Field amplitude'));
+  // ── Profile plot with FWHM markers ──
+  const profileTraces = [
+    { x: xs, y: profile, type:'scatter', mode:'lines', name:'Ex (horizontal)',
+      line:{color:'#80cbc4', width:2}, fill:'tozeroy', fillcolor:'rgba(92,107,192,0.2)' }
+  ];
+  const profileLayout = {...plotLayout(xUnit, 'Field amplitude'), shapes:[], annotations:[]};
+  if (fwhmX !== null) {
+    const cx = xs[midRow];
+    const halfX = fwhmX / 2;
+    const peakVal = Math.max(...profile.map(v=>v*v));
+    const halfVal = Math.sqrt(peakVal / 2); // half-max of field amplitude
+    profileLayout.shapes.push(
+      {type:'line', x0:cx-halfX, x1:cx+halfX, y0:halfVal, y1:halfVal,
+       line:{color:'#ffeb3b', width:2, dash:'solid'}},
+      {type:'line', x0:cx-halfX, x1:cx-halfX, y0:0, y1:halfVal,
+       line:{color:'#ffeb3b', width:1, dash:'dot'}},
+      {type:'line', x0:cx+halfX, x1:cx+halfX, y0:0, y1:halfVal,
+       line:{color:'#ffeb3b', width:1, dash:'dot'}}
+    );
+    profileLayout.annotations.push({
+      x: cx, y: halfVal,
+      text: `FWHM = ${fwhmXStr}`, showarrow:true, arrowcolor:'#ffeb3b',
+      arrowhead:2, ax:0, ay:-30,
+      font:{color:'#ffeb3b', size:11}, bgcolor:'rgba(0,0,0,0.5)'
+    });
+  }
+
+  Plotly.react('profilePlot', profileTraces, profileLayout);
 }
 
 function plotLayout(xtitle, ytitle) {
